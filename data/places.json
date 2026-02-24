@@ -1,0 +1,182 @@
+[
+  {
+    "id": "1",
+    "name": "โรงเรียนเขาใหญ่พิทยาคม",
+    "city": "ปากช่อง (โป่งตาลอง)",
+    "type": "school/stadium",
+    "latitude": 14.5079612,
+    "longitude": 101.5480728,
+    "address": "3052 ทางหลวงชนบท ตำบลโป่งตาลอง"
+  },
+  {
+    "id": "2",
+    "name": "โรงเรียนบ้านโป่งตาลอง",
+    "city": "ปากช่อง (โป่งตาลอง)",
+    "type": "school/stadium",
+    "latitude": 14.4734723,
+    "longitude": 101.5716551,
+    "address": "3052 ทางหลวงชนบท ตำบลโป่งตาลอง"
+  },
+  {
+    "id": "3",
+    "name": "Toscana Valley Tennis Court",
+    "city": "ปากช่อง (โป่งตาลอง)",
+    "type": "sport_club",
+    "latitude": 14.5079421,
+    "longitude": 101.5077016,
+    "address": "โครงการทอสกานา วัลเล่ย์ ตำบลโป่งตาลอง"
+  },
+  {
+    "id": "4",
+    "name": "Calorie Fitness Pakchong",
+    "city": "ปากช่อง",
+    "type": "gym",
+    "latitude": 14.7042,
+    "longitude": 101.4150,
+    "address": "ต.ปากช่อง อ.ปากช่อง (ใกล้ศูนย์ฮอนด้า)"
+  },
+  {
+    "id": "5",
+    "name": "Mi Fitness",
+    "city": "ปากช่อง",
+    "type": "gym",
+    "latitude": 14.7022876,
+    "longitude": 101.4108218,
+    "address": "ถ.เทศบาล 16 อ.ปากช่อง"
+  },
+  {
+    "id": "6",
+    "name": "Fitness Lifestyle Central Korat",
+    "city": "นครราชสีมา (เมือง)",
+    "type": "gym",
+    "latitude": 14.996555,
+    "longitude": 102.1160881,
+    "address": "เซ็นทรัล โคราช ชั้น 4"
+  },
+  {
+    "id": "7",
+    "name": "สนามกีฬาเฉลิมพระเกียรติ 80 พรรษา",
+    "city": "นครราชสีมา (เมือง)",
+    "type": "stadium",
+    "latitude": 14.9351,
+    "longitude": 102.0382,
+    "address": "ต.ปรุใหญ่ (สนามกีฬาซีเกมส์)"
+  },
+  {
+    "id": "8",
+    "name": "สวนน้ำบุ่งตาหลั่ว เฉลิมพระเกียรติ ร.9",
+    "city": "นครราชสีมา (เมือง)",
+    "type": "park",
+    "latitude": 14.9547,
+    "longitude": 102.0961,
+    "address": "ต.หนองไผ่ล้อม (สถานที่วิ่งยอดนิยม)"
+  },
+  {
+    "id": "9",
+    "name": "333 Fitness Centre",
+    "city": "นครราชสีมา (เมือง)",
+    "type": "gym",
+    "latitude": 14.9302378,
+    "longitude": 102.0445338,
+    "address": "ต.สุรนารี ใกล้สนามกีฬา 80 พรรษา"
+  },
+  {
+    "id": "10",
+    "name": "Jetts 24 Hour Fitness - Terminal 21 Korat",
+    "city": "นครราชสีมา (เมือง)",
+    "type": "gym",
+    "latitude": 14.9918,
+    "longitude": 102.1125,
+    "address": "ชั้น LG เทอร์มินอล 21 โคราช"
+  },
+  {
+    "id": "11",
+    "name": "Fitness First - The Mall Korat",
+    "city": "นครราชสีมา (เมือง)",
+    "type": "gym",
+    "latitude": 14.9818,
+    "longitude": 102.0592,
+    "address": "ชั้น 3 เดอะมอลล์ โคราช"
+  },
+  {
+    "id": "12",
+    "name": "สวนสาธารณะเขาแคน",
+    "city": "ปากช่อง",
+    "type": "park",
+    "latitude": 14.7061,
+    "longitude": 101.4124,
+    "address": "ถ.มิตรภาพ ใจกลางเมืองปากช่อง"
+  },
+  {
+    "id": "13",
+    "name": "สนามฟุตบอลหญ้าเทียมพรีเมียร์โคราช",
+    "city": "นครราชสีมา (เมือง)",
+    "type": "stadium",
+    "latitude": 14.9602,
+    "longitude": 102.0655,
+    "address": "ถ.สืบศิริ ต.ในเมือง"
+  },
+  {
+    "id": "14",
+    "name": "V-Twins Gym Korat",
+    "city": "นครราชสีมา (เมือง)",
+    "type": "gym",
+    "latitude": 14.9936,
+    "longitude": 102.1221,
+    "address": "ถ.สุรนารายณ์ ต.ในเมือง"
+  },
+  {
+    "id": "15",
+    "name": "Kirin Valley Stadium",
+    "city": "ปากช่อง (หมูสี)",
+    "type": "stadium",
+    "latitude": 14.5305,
+    "longitude": 101.4592,
+    "address": "ต.หมูสี อ.ปากช่อง (โซนเขาใหญ่)"
+  },
+  {
+    "id": "16",
+    "name": "สวนภูมิรักษ์ 2",
+    "city": "นครราชสีมา (เมือง)",
+    "type": "park",
+    "latitude": 14.972618,
+    "longitude": 102.072174,
+    "address": "ถ.มุขมนตรี ต.ในเมือง"
+  },
+  {
+    "id": "17",
+    "name": "ปากช่องอารีน่า",
+    "city": "ปากช่อง",
+    "type": "stadium",
+    "latitude": 14.6752567,
+    "longitude": 101.4009794,
+    "address": "ถ.มิตรภาพ อ.ปากช่อง"
+  },
+  {
+    "id": "18",
+    "name": "Fitness ms sportclub korat",
+    "city": "นครราชสีมา (เมือง)",
+    "type": "gym/pool",
+    "latitude": 14.9976574,
+    "longitude": 102.1109615,
+    "address": "ถ.มิตรภาพ ต.หมื่นไวย"
+  },
+  {
+    "id": "19",
+    "name": "KSB GYM",
+    "city": "นครราชสีมา (เมือง)",
+    "type": "gym",
+    "latitude": 14.9855,
+    "longitude": 102.1092,
+    "address": "ใกล้สนามกีฬากลางจังหวัด ต.ในเมือง"
+  },
+  {
+    "id": "20",
+    "name": "White Gym Korat",
+    "city": "นครราชสีมา (เมือง)",
+    "type": "gym",
+    "latitude": 14.9750,
+    "longitude": 102.1000,
+    "address": "เขตเทศบาลนครนครราชสีมา"
+  }
+]
