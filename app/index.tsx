@@ -1,31 +1,22 @@
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  RefreshControl,
+import { 
+  View, Text, FlatList, TouchableOpacity, StyleSheet, 
+  ActivityIndicator, RefreshControl, SafeAreaView, Dimensions 
 } from "react-native";
 import { useEffect, useState, useCallback } from "react";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import placesData from "../data/places.json";
-import { getDistance } from "../utils/distance";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
-interface Place {
-  id: string;
-  name: string;
-  city: string;
-  latitude: number;
-  longitude: number;
-  address: string;
-  distance?: number;
-}
+import ImageCarousel from "../components/ImageCarousel"; 
+import { getDistance } from "../utils/distance";
+import { PlaceCard } from "../components/PlaceCard"; 
+import { PlaceService } from "../services/placeService";
+
+const { width } = Dimensions.get("window");
 
 export default function Home() {
-  const [places, setPlaces] = useState<Place[]>([]);
+  const [places, setPlaces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
@@ -36,31 +27,32 @@ export default function Home() {
 
   const loadData = async () => {
     try {
-      setLoading(true);
+      if (!refreshing) setLoading(true);
+
+      // 1. จัดการ GPS
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         setLoading(false);
         return;
       }
-
-      const location = await Location.getCurrentPositionAsync({});
+      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const { latitude, longitude } = location.coords;
 
-      const updated = placesData.map((place: Place) => {
-        const distance = getDistance(
-          latitude,
-          longitude,
-          place.latitude,
-          place.longitude
-        );
-        return { ...place, distance };
-      });
+      // 2. 🔥 ดึงข้อมูลผ่าน Service (Supabase)
+      const data = await PlaceService.getPlaces();
 
-      // เรียงจากใกล้ไปไกล
-      updated.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
-      setPlaces(updated.slice(0, 10));
+      // 3. คำนวณระยะทาง
+      const updated = data.map((place: any) => ({
+        ...place,
+        distance: getDistance(latitude, longitude, place.latitude, place.longitude)
+      }));
+
+      // เรียงลำดับและจัดเก็บ
+     // updated.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
+     // setPlaces(updated.slice(0, 10));
+
     } catch (error) {
-      console.error("Error loading location", error);
+      console.error("Error loading data:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -72,224 +64,109 @@ export default function Home() {
     loadData();
   }, []);
 
-  const renderPlace = ({ item }: { item: Place }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() =>
-        // *** จุดที่ปรับปรุง: ส่ง params ไปให้ครบเพื่อเปิด Google Maps ในหน้า Detail ***
-        router.push({
-          pathname: "/place/[id]",
-          params: { 
-            id: item.id, 
-            name: item.name,
-            lat: item.latitude,
-            lng: item.longitude
-          },
-        })
-      }
-    >
-      <View style={styles.iconContainer}>
-        <View style={styles.iconCircle}>
-           <Ionicons name="location" size={20} color="#007AFF" />
-        </View>
-      </View>
-
-      <View style={{ flex: 1 }}>
-        <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-
-        <View style={styles.row}>
-          <Ionicons name="business-outline" size={14} color="#666" />
-          <Text style={styles.city}>{item.city}</Text>
-        </View>
-
-        <View style={styles.row}>
-          <Ionicons name="navigate-outline" size={14} color="#007AFF" />
-          <Text style={styles.distance}>
-            {item.distance?.toFixed(2)} km จากตำแหน่งของคุณ
-          </Text>
-        </View>
-      </View>
-
-      <Ionicons name="chevron-forward" size={20} color="#bbb" />
-    </TouchableOpacity>
-  );
-
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.headerSection}>
-        <Text style={styles.header}>Nearby Sports</Text>
-        <Text style={styles.subHeader}>ค้นหาสถานที่ออกกำลังกายใกล้คุณ</Text>
-      </View>
-
-      {/* Quick Access Buttons */}
-      <View style={styles.topButtons}>
-        <TouchableOpacity
-          style={styles.mapButton}
-          onPress={() => router.push("/map")}
-        >
-          <Ionicons name="map" size={20} color="#fff" />
-          <Text style={styles.buttonText}>แผนที่</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.favoriteButton}
-          onPress={() => router.push("/favorites")}
-        >
-          <Ionicons name="heart" size={20} color="#fff" />
-          <Text style={styles.buttonText}>Favorites</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Content Section */}
-      <View style={styles.listHeaderRow}>
-        <Text style={styles.sectionTitle}>Top 10 ใกล้คุณ</Text>
-        {loading && <ActivityIndicator size="small" color="#007AFF" />}
-      </View>
-
-      {loading && !refreshing ? (
-        <View style={styles.loadingContainer}>
-           <ActivityIndicator size="large" color="#007AFF" />
-           <Text style={styles.loadingText}>กำลังคำนวณระยะทาง...</Text>
-        </View>
-      ) : (
+      <LinearGradient colors={["#E8E7FF", "#F2F2F7", "#F8F9FB"]} style={styles.gradientHeader} />
+      <SafeAreaView style={{ flex: 1 }}>
         <FlatList
           data={places}
-          keyExtractor={(item) => item.id}
-          renderItem={renderPlace}
+          keyExtractor={(item) => item.id.toString()}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 20 }}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          ListHeaderComponent={
+            <View style={styles.headerWrapper}>
+              <View style={styles.topLogoRow}>
+                <Ionicons name="flash" size={24} color="#5856D6" />
+                <Text style={styles.logoText}>FITLOCATOR</Text>
+              </View>
+              <ImageCarousel />
+              <View style={styles.welcomeSection}>
+                <Text style={styles.subtitle}>สนามกีฬาที่ใกล้คุณที่สุดตอนนี้</Text>
+              </View>
+              <View style={styles.topButtons}>
+                <TouchableOpacity style={styles.mapBtn} onPress={() => router.push("/map")}>
+                  <LinearGradient colors={["#1C1C1E", "#3A3A3C"]} style={styles.innerBtnGradient}>
+                    <Ionicons name="map" size={18} color="white" /><Text style={styles.btnText}>ดูแผนที่</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.favBtn} onPress={() => router.push("/favorites")}>
+                  <LinearGradient colors={["#FF2D55", "#FF5E7D"]} style={styles.innerBtnGradient}>
+                    <Ionicons name="heart" size={18} color="white" /><Text style={styles.btnText}>รายการโปรด</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.listHeader}>
+                <Text style={styles.sectionTitle}>10 อันดับใกล้คุณ</Text>
+                {loading && !refreshing && <ActivityIndicator size="small" color="#5856D6" />}
+              </View>
+            </View>
           }
-          ListEmptyComponent={
-            <Text style={styles.emptyText}>ไม่พบสถานที่ใกล้เคียงในขณะนี้</Text>
-          }
+          renderItem={({ item }) => (
+            <PlaceCard 
+              item={item} 
+              onPress={() => router.push({
+                pathname: "/place/[id]",
+                params: { id: item.id, name: item.name, lat: item.latitude, lng: item.longitude }
+              })}
+            />
+          )}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#5856D6" />}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          ListEmptyComponent={!loading ? (
+            <View style={{ alignItems: 'center', marginTop: 50 }}>
+              <Text style={styles.emptyText}>ไม่พบสถานที่ใกล้เคียง</Text>
+              <TouchableOpacity onPress={loadData} style={{ marginTop: 10 }}>
+                <Text style={{ color: '#5856D6' }}>ลองใหม่อีกครั้ง</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         />
-      )}
+      </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 20,
-    backgroundColor: "#f8f9fa",
+  container: { flex: 1, backgroundColor: "#F8F9FB" },
+  gradientHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: width * 1.3, // ให้คลุมลงมาถึงช่วงปุ่ม
   },
-  headerSection: {
-    marginTop: 60,
-    marginBottom: 20,
-  },
-  header: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#1a1a1a",
-  },
-  subHeader: {
-    fontSize: 15,
-    color: "#777",
-    marginTop: 4,
-  },
-  topButtons: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 25,
-  },
-  mapButton: {
-    flex: 1,
-    backgroundColor: "#007AFF",
-    paddingVertical: 14,
-    borderRadius: 15,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 3,
-  },
-  favoriteButton: {
-    flex: 1,
-    backgroundColor: "#FF3B30",
-    paddingVertical: 14,
-    borderRadius: 15,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 3,
-  },
-  buttonText: {
-    color: "#fff",
-    marginLeft: 8,
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  listHeaderRow: {
+  headerWrapper: { paddingHorizontal: 20 },
+  topLogoRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginTop: 10,
+    marginBottom: 15,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
+  logoText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#5856D6',
+    marginLeft: 5,
+    letterSpacing: 2,
   },
-  card: {
+  welcomeSection: { marginTop: 25, marginBottom: 20 },
+  title: { fontSize: 36, fontWeight: "900", color: "#1C1C1E", letterSpacing: -1 },
+  subtitle: { fontSize: 16, color: "#636366", marginTop: 4 },
+  topButtons: { flexDirection: "row", gap: 12, marginBottom: 35 },
+  mapBtn: { flex: 1, height: 58, borderRadius: 18, overflow: 'hidden', elevation: 5 },
+  favBtn: { flex: 1, height: 58, borderRadius: 18, overflow: 'hidden', elevation: 5 },
+  innerBtnGradient: {
+    flex: 1,
     flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    padding: 16,
-    marginBottom: 12,
-    borderRadius: 18,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
-  iconContainer: {
-    marginRight: 15,
-  },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#EBF5FF",
     justifyContent: "center",
     alignItems: "center",
   },
-  name: {
-    fontSize: 17,
-    fontWeight: "bold",
-    color: "#222",
-  },
-  city: {
-    marginLeft: 6,
-    fontSize: 13,
-    color: "#666",
-  },
-  distance: {
-    marginLeft: 6,
-    fontSize: 13,
-    color: "#007AFF",
-    fontWeight: "600",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 4,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  btnText: { color: "white", marginLeft: 8, fontWeight: "700", fontSize: 15 },
+  listHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
     alignItems: 'center',
+    marginBottom: 15 
   },
-  loadingText: {
-    marginTop: 10,
-    color: '#666',
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 50,
-    color: '#999',
-  }
+  sectionTitle: { fontSize: 22, fontWeight: "800", color: "#1C1C1E" },
+  emptyText: { textAlign: 'center', marginTop: 40, color: '#AEAEB2' },
 });

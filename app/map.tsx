@@ -1,132 +1,221 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, Linking, Platform } from "react-native";
-import MapView, { Marker, PROVIDER_GOOGLE, Callout } from "react-native-maps";
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  TextInput,
+  StyleSheet,
+  Linking,
+  Platform,
+  SafeAreaView,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
+import MapView, {
+  Marker,
+  AnimatedRegion,
+  PROVIDER_GOOGLE,
+  Callout,
+} from "react-native-maps";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import placesData from "../data/places.json";
 import { getDistance } from "../utils/distance";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 export default function MapScreen() {
+  const router = useRouter();
   const mapRef = useRef<MapView>(null);
+  const followUser = useRef(true);
+
+  // แก้จุดที่ 1: ใช้ any ครอบเพื่อให้ TypeScript ไม่บ่นเรื่อง AnimatedRegion properties
+  const userLocationAnim = useRef<any>(
+    new AnimatedRegion({
+      latitude: 13.7563,
+      longitude: 100.5018,
+      latitudeDelta: 0.05,
+      longitudeDelta: 0.05,
+    })
+  ).current;
+
   const [userLocation, setUserLocation] = useState<any>(null);
-  const [places, setPlaces] = useState<any[]>([]); 
+  const [initialRegion, setInitialRegion] = useState<any>(null);
+  const [places, setPlaces] = useState<any[]>([]);
   const [filteredPlaces, setFilteredPlaces] = useState<any[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [search, setSearch] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false); // ควบคุมการแสดงผลการค้นหา
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [nearbyOnly, setNearbyOnly] = useState(false);
 
   useEffect(() => {
-    startTracking();
+    initMap();
     loadFavorites();
   }, []);
 
   useEffect(() => {
-    if (userLocation) {
-      const updated = placesData.map((place) => ({
-        ...place,
-        distance: getDistance(userLocation.latitude, userLocation.longitude, place.latitude, place.longitude),
-      }));
-      updated.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
-      setPlaces(updated);
-    }
+    if (!userLocation) return;
+    const updated = placesData.map((place: any) => ({
+      ...place,
+      distance: getDistance(
+        userLocation.latitude,
+        userLocation.longitude,
+        place.latitude,
+        place.longitude
+      ),
+    }));
+    updated.sort((a, b) => a.distance - b.distance);
+    setPlaces(updated);
   }, [userLocation]);
 
-  // ระบบกรองข้อมูล (ทำงานร่วมกันทั้ง Search และ Nearby)
   useEffect(() => {
     let result = [...places];
-    if (search.trim() !== "") {
+    if (search.trim()) {
       result = result.filter((place) =>
         place.name.toLowerCase().includes(search.toLowerCase())
       );
     }
     if (nearbyOnly) {
-      result = result.filter((place) => place.distance !== undefined && place.distance <= 5);
+      result = result.filter((place) => place.distance <= 5);
     }
     setFilteredPlaces(result);
-  }, [search, nearbyOnly, places]);
+  }, [places, search, nearbyOnly]);
 
-  const startTracking = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") return;
-    Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
-      (loc) => setUserLocation(loc.coords)
-    );
+  const initMap = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "กรุณาเปิด Location");
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const coords = location.coords;
+      const region = {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      };
+
+      setUserLocation(coords);
+      setInitialRegion(region);
+      userLocationAnim.setValue(region);
+
+      Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 2000,
+          distanceInterval: 3,
+        },
+        (loc) => {
+          const newCoords = loc.coords;
+          setUserLocation(newCoords);
+
+          // แก้จุดที่ 2: ใช้ as any เพื่อแก้ Error 'latitude' does not exist
+          userLocationAnim
+            .timing({
+              toValue: {
+                latitude: newCoords.latitude,
+                longitude: newCoords.longitude,
+              } as any,
+              duration: 800,
+              useNativeDriver: false,
+            })
+            .start();
+
+          if (followUser.current && mapRef.current) {
+            mapRef.current.animateCamera(
+              {
+                center: {
+                  latitude: newCoords.latitude,
+                  longitude: newCoords.longitude,
+                },
+                zoom: 16,
+              },
+              { duration: 800 }
+            );
+          }
+        }
+      );
+    } catch (e) {
+      Alert.alert("Error", "ไม่สามารถดึงตำแหน่งได้");
+    }
   };
 
   const loadFavorites = async () => {
     const stored = await AsyncStorage.getItem("favorites");
-    if (stored) setFavorites(JSON.parse(stored).map((f: any) => f.id));
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      setFavorites(parsed.map((f: any) => f.id));
+    }
   };
 
   const openNavigation = (place: any) => {
     const url = Platform.select({
-      ios: `maps:0,0?q=${encodeURIComponent(place.name)}@${place.latitude},${place.longitude}`,
-      android: `geo:${place.latitude},${place.longitude}?q=${encodeURIComponent(place.name)}`,
+      ios: `maps:0,0?q=${place.latitude},${place.longitude}`,
+      android: `geo:${place.latitude},${place.longitude}`,
     });
-    Linking.openURL(url!);
+    if (url) Linking.openURL(url);
   };
 
-  if (!userLocation) return <View style={styles.center}><Text>กำลังโหลดพิกัด...</Text></View>;
+  if (!initialRegion) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={{ marginTop: 10 }}>กำลังค้นหาตำแหน่ง...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* Search Header */}
-      <View style={styles.header}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="#999" />
-          <TextInput
-            style={styles.input}
-            placeholder="ค้นหาสถานที่..."
-            value={search}
-            onChangeText={(t) => { 
-              setSearch(t); 
-              setShowSuggestions(true); // เปิด Suggestions เมื่อมีการพิมพ์
-            }}
-            onFocus={() => setShowSuggestions(true)}
-          />
-          {search !== "" && (
-            <TouchableOpacity onPress={() => { setSearch(""); setShowSuggestions(false); }}>
-              <Ionicons name="close-circle" size={20} color="#ccc" />
-            </TouchableOpacity>
-          )}
+      <SafeAreaView style={styles.header}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={28} />
+          </TouchableOpacity>
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={20} color="#999" />
+            <TextInput
+              style={styles.input}
+              placeholder="ค้นหาสถานที่..."
+              value={search}
+              onChangeText={(text) => {
+                setSearch(text);
+                setShowSuggestions(true);
+              }}
+            />
+          </View>
         </View>
+      </SafeAreaView>
 
-        <TouchableOpacity 
-          activeOpacity={0.8}
-          style={[styles.nearbyBtn, nearbyOnly && styles.nearbyBtnActive]} 
-          onPress={() => setNearbyOnly(!nearbyOnly)}
-        >
-          <Ionicons name={nearbyOnly ? "location" : "location-outline"} size={18} color="white" />
-          <Text style={styles.nearbyText}>{nearbyOnly ? "กรอง 5 กม." : "ใกล้ฉัน (5km)"}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* รายการแนะนำผลการค้นหา (Suggestion List) - ส่วนที่หายไปเอากลับมาแล้ว */}
+      {/* แก้จุดที่ 3: จัดระเบียบ Text ให้ไม่มีช่องว่างส่วนเกิน */}
       {showSuggestions && search.length > 0 && (
         <View style={styles.suggestionsBox}>
           <FlatList
-            data={filteredPlaces.slice(0, 5)} // แสดง 5 อันดับแรก
+            data={filteredPlaces.slice(0, 5)}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={styles.suggestionItem}
                 onPress={() => {
-                  setSearch(item.name);
-                  setShowSuggestions(false);
-                  mapRef.current?.animateToRegion({
-                    latitude: item.latitude,
-                    longitude: item.longitude,
-                    latitudeDelta: 0.01,
-                    longitudeDelta: 0.01,
+                  followUser.current = false;
+                  mapRef.current?.animateCamera({
+                    center: { latitude: item.latitude, longitude: item.longitude },
+                    zoom: 16,
                   });
+                  setShowSuggestions(false);
                 }}
               >
-                <Ionicons name="pin-outline" size={16} color="#666" />
-                <Text style={styles.suggestionText}>{item.name}</Text>
-                <Text style={styles.suggestionDist}>{item.distance?.toFixed(1)} km</Text>
+                <View style={styles.suggestionRow}>
+                  <Text style={styles.suggestionName}>{item.name}</Text>
+                  <Text style={styles.suggestionDist}>{item.distance?.toFixed(1)} km</Text>
+                </View>
               </TouchableOpacity>
             )}
           />
@@ -137,37 +226,50 @@ export default function MapScreen() {
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={styles.map}
-        initialRegion={{
-          latitude: userLocation.latitude,
-          longitude: userLocation.longitude,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
-        onPress={() => setShowSuggestions(false)} // ปิด Suggestions เมื่อแตะแผนที่
+        initialRegion={initialRegion}
+        showsUserLocation={false}
+        onTouchStart={() => { followUser.current = false; }}
       >
-        <Marker coordinate={userLocation} zIndex={10}>
-          <View style={styles.userMarkerOuter}><View style={styles.userMarkerInner} /></View>
-        </Marker>
+        <Marker.Animated
+          coordinate={userLocationAnim as any}
+        >
+          <View style={styles.userMarkerOuter}>
+            <View style={styles.userMarkerInner} />
+          </View>
+        </Marker.Animated>
 
         {filteredPlaces.map((place) => (
           <Marker
             key={place.id}
             coordinate={{ latitude: place.latitude, longitude: place.longitude }}
-            pinColor={favorites.includes(place.id) ? "red" : "blue"}
+            pinColor={favorites.includes(place.id) ? "#FF2D55" : "#007AFF"}
           >
             <Callout onPress={() => openNavigation(place)}>
-              <View style={styles.calloutContainer}>
+              <View style={styles.callout}>
                 <Text style={styles.calloutTitle}>{place.name}</Text>
-                <Text style={styles.calloutDist}>{place.distance?.toFixed(2)} กม.</Text>
-                <View style={styles.navBadge}><Text style={styles.navBadgeText}>🚗 กดเพื่อนำทาง</Text></View>
+                <Text style={styles.calloutText}>📍 {place.distance?.toFixed(2)} km</Text>
               </View>
             </Callout>
           </Marker>
         ))}
       </MapView>
 
-      <TouchableOpacity style={styles.fab} onPress={() => mapRef.current?.animateToRegion({...userLocation, latitudeDelta: 0.01, longitudeDelta: 0.01})}>
-        <Ionicons name="locate" size={30} color="#007AFF" />
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => {
+          followUser.current = true;
+          if (userLocation) {
+            mapRef.current?.animateCamera(
+              {
+                center: { latitude: userLocation.latitude, longitude: userLocation.longitude },
+                zoom: 16,
+              },
+              { duration: 800 }
+            );
+          }
+        }}
+      >
+        <Ionicons name="locate" size={28} color="#007AFF" />
       </TouchableOpacity>
     </View>
   );
@@ -177,39 +279,20 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: { position: "absolute", top: 50, left: 15, right: 15, zIndex: 10 },
-  searchBar: {
-    flexDirection: "row", backgroundColor: "white", borderRadius: 15,
-    paddingHorizontal: 15, height: 50, alignItems: "center",
-    elevation: 5, shadowOpacity: 0.1,
-  },
-  input: { flex: 1, marginLeft: 10, fontSize: 16 },
-  nearbyBtn: {
-    marginTop: 10, backgroundColor: "#666", flexDirection: "row", alignSelf: "flex-start",
-    paddingVertical: 10, paddingHorizontal: 16, borderRadius: 25, alignItems: "center", elevation: 3,
-  },
-  nearbyBtnActive: { backgroundColor: "#007AFF" },
-  nearbyText: { color: "white", fontWeight: "bold", marginLeft: 5 },
-
-  // Suggestions Box Style
-  suggestionsBox: {
-    position: "absolute", top: 105, left: 15, right: 15,
-    backgroundColor: "white", borderRadius: 15, zIndex: 11,
-    elevation: 5, overflow: 'hidden'
-  },
-  suggestionItem: {
-    flexDirection: 'row', padding: 15, borderBottomWidth: 0.5, borderBottomColor: '#eee', alignItems: 'center'
-  },
-  suggestionText: { flex: 1, marginLeft: 10, fontSize: 15 },
-  suggestionDist: { color: '#007AFF', fontSize: 12 },
-
-  calloutContainer: { padding: 10, alignItems: "center", width: 150 },
-  calloutTitle: { fontWeight: "bold", fontSize: 14, textAlign: 'center' },
-  calloutDist: { color: "#007AFF", marginVertical: 4 },
-  navBadge: { backgroundColor: "#34C759", paddingVertical: 4, paddingHorizontal: 8, borderRadius: 5 },
-  navBadgeText: { color: "white", fontSize: 11, fontWeight: "bold" },
-
-  userMarkerOuter: { width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(0,122,255,0.2)", justifyContent: "center", alignItems: "center" },
-  userMarkerInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#007AFF", borderWidth: 2, borderColor: "white" },
-  fab: { position: "absolute", bottom: 30, right: 20, backgroundColor: "white", width: 60, height: 60, borderRadius: 30, justifyContent: "center", alignItems: "center", elevation: 5 },
+  header: { position: "absolute", top: 10, left: 15, right: 15, zIndex: 10 },
+  headerRow: { flexDirection: "row", gap: 10 },
+  backBtn: { width: 45, height: 45, backgroundColor: "white", borderRadius: 15, justifyContent: "center", alignItems: "center", elevation: 5 },
+  searchBar: { flex: 1, flexDirection: "row", backgroundColor: "white", borderRadius: 15, paddingHorizontal: 15, alignItems: "center", elevation: 5 },
+  input: { flex: 1, marginLeft: 10, height: 45 },
+  suggestionsBox: { position: "absolute", top: 100, left: 15, right: 15, backgroundColor: "white", borderRadius: 15, zIndex: 11, elevation: 5, overflow: 'hidden' },
+  suggestionItem: { padding: 15, borderBottomWidth: 0.5, borderBottomColor: '#eee' },
+  suggestionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  suggestionName: { fontSize: 14, color: '#333' },
+  suggestionDist: { color: "#007AFF", fontSize: 12, fontWeight: 'bold' },
+  callout: { padding: 5, width: 140 },
+  calloutTitle: { fontWeight: "bold", fontSize: 14 },
+  calloutText: { fontSize: 12, color: '#666', marginTop: 2 },
+  fab: { position: "absolute", bottom: 40, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: "white", justifyContent: "center", alignItems: "center", elevation: 8 },
+  userMarkerOuter: { width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(0,122,255,0.2)", justifyContent: "center", alignItems: "center" },
+  userMarkerInner: { width: 14, height: 14, borderRadius: 7, backgroundColor: "#007AFF", borderWidth: 2, borderColor: 'white' },
 });
