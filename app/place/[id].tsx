@@ -1,124 +1,141 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { 
-  View, Text, TouchableOpacity, StyleSheet, Alert, 
-  ScrollView, Linking, Platform, ActivityIndicator, Image 
+  View, Text, StyleSheet, ScrollView, Image, 
+  TouchableOpacity, Linking, Dimensions, StatusBar,
+  Platform 
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useLocalSearchParams, useRouter, Stack } from "expo-router"; 
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { PlaceService } from "../../services/placeService"; 
 import { LinearGradient } from "expo-linear-gradient";
+import { PlaceService } from "../../services/placeService";
+import ReviewSection from "../../components/ReviewSection";
+
+const { width } = Dimensions.get("window");
 
 export default function PlaceDetail() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const [place, setPlace] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'info' | 'review'>('info');
   const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
-    fetchDetail();
-    checkFavoriteStatus();
+    if (id) loadData();
   }, [id]);
 
-  const fetchDetail = async () => {
-    try {
-      const data = await PlaceService.getPlaceById(id as string);
-      setPlace(data);
-    } catch (e) {
-      Alert.alert("Error", "ไม่พบข้อมูลสถานที่");
-      router.back();
-    } finally {
-      setLoading(false);
-    }
+  const loadData = async () => {
+    const data = await PlaceService.getPlaceById(id as string);
+    setPlace(data);
   };
 
-  const checkFavoriteStatus = async () => {
-    const stored = await AsyncStorage.getItem("favorites");
-    if (stored) {
-      const favs = JSON.parse(stored);
-      setIsFavorite(favs.some((f: any) => f.id === id));
-    }
-  };
-
-  const handleFavoriteAction = async () => {
-    const stored = await AsyncStorage.getItem("favorites");
-    let favs = stored ? JSON.parse(stored) : [];
-    if (isFavorite) {
-      favs = favs.filter((f: any) => f.id !== id);
-    } else {
-      favs.push({ id: place.id, name: place.name, latitude: place.latitude, longitude: place.longitude });
-    }
-    await AsyncStorage.setItem("favorites", JSON.stringify(favs));
-    setIsFavorite(!isFavorite);
-  };
-
-  if (loading) return (
-    <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color="#5856D6" />
+  if (!place) return (
+    <View style={styles.loader}>
+      <Text style={{fontSize: 16, color: '#8E8E93'}}>กำลังโหลดข้อมูล... ✨</Text>
     </View>
   );
 
+  
+
   return (
     <View style={styles.container}>
-      <Stack.Screen 
-        options={{ 
-          title: place?.name || "", 
-          headerTitleAlign: 'center',
-          headerBackTitle: "Fitlocator",
-        }} 
-      />
-      <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-        <View style={styles.header}>
-          {place?.image_url ? (
-            <Image source={{ uri: place.image_url }} style={styles.headerImage} />
-          ) : (
-            <LinearGradient colors={["#5856D6", "#8583E1"]} style={styles.headerImage}>
-              <Ionicons name="fitness" size={60} color="white" />
-            </LinearGradient>
-          )}
+      <StatusBar barStyle="light-content" />
+      
+      <View style={{ position: 'absolute', top: 50, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 10 }}>
+  {/* ปุ่มย้อนกลับ */}
+  <TouchableOpacity 
+    style={{ backgroundColor: 'white', padding: 10, borderRadius: 15, elevation: 5, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 4 }} 
+    onPress={() => router.back()}
+  >
+    <Ionicons name="arrow-back" size={24} color="black" />
+  </TouchableOpacity>
+
+  {/* ปุ่มหัวใจ */}
+  <TouchableOpacity 
+    style={{ backgroundColor: 'white', padding: 10, borderRadius: 15, elevation: 5, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 4 }} 
+    onPress={() => setIsFavorite(!isFavorite)}
+  >
+    <Ionicons 
+      name={isFavorite ? "heart" : "heart-outline"} 
+      size={24} 
+      color={isFavorite ? "#FF2D55" : "black"} 
+    />
+  </TouchableOpacity>
+</View>
+      
+
+      <ScrollView bounces={false} showsVerticalScrollIndicator={false} automaticallyAdjustKeyboardInsets={true}>
+        {/* 2. รูปภาพ - ปรับความสูงลงมาเหลือ 280 ให้พอดีตา ไม่กินพื้นที่เยอะเกินไป */}
+        <View style={styles.imageContainer}>
+          <Image source={{ uri: place.image_url }} style={styles.image} />
+          <LinearGradient 
+            colors={['rgba(0,0,0,0.4)', 'transparent']} 
+            style={styles.imageTopOverlay} 
+          />
+          
+        </View>
+        
+
+        {/* 3. ส่วนหัวข้อสถานที่ - จัดวางใหม่ให้ดูโปร่งขึ้น */}
+        <View style={styles.titleSection}>
+          <Text style={styles.name}>{place.name}</Text>
+          <View style={styles.metaRow}>
+            <View style={styles.typeBadge}>
+               <Text style={styles.typeText}>📍 {place.type}</Text>
+            </View>
+          
+          </View>
         </View>
 
-        <View style={styles.contentCard}>
-          <Text style={styles.categoryText}>{place?.type?.toUpperCase()} • {place?.city}</Text>
-          <Text style={styles.title}>{place?.name}</Text>
-
-          <View style={styles.infoRow}>
-            <Ionicons name="location-sharp" size={20} color="#5856D6" />
-            <Text style={styles.infoText}>{place?.address}</Text>
+        {/* 4. ✅ TAB BAR - ใส่ Shadow ให้ลอยเด่นขึ้นมา และเช็คว่าไม่โดนอะไรทับ */}
+        <View style={styles.tabWrapper}>
+          <View style={styles.tabContainer}>
+            <TouchableOpacity 
+              style={[styles.tabButton, activeTab === 'info' && styles.activeTab]}
+              onPress={() => setActiveTab('info')}
+            >
+              <Text style={[styles.tabLabel, activeTab === 'info' && styles.activeTabLabel]}>รายละเอียด</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.tabButton, activeTab === 'review' && styles.activeTab]}
+              onPress={() => setActiveTab('review')}
+            >
+              <Text style={[styles.tabLabel, activeTab === 'review' && styles.activeTabLabel]}>รีวิว</Text>
+            </TouchableOpacity>
           </View>
+        </View>
 
-          <View style={styles.divider} />
+        {/* 5. ส่วนเนื้อหา */}
+        <View style={styles.contentArea}>
+          {activeTab === 'info' ? (
+            <View>
+              <View style={styles.infoCard}>
+                <View style={styles.infoRow}>
+                  <Ionicons name="call" size={20} color="#5856D6" />
+                  <Text style={styles.infoText}>{place.phone || "ไม่ระบุเบอร์โทร"}</Text>
+                </View>
+                <View style={[styles.infoRow, { alignItems: 'flex-start' }]}>
+                  <Ionicons name="location" size={20} color="#5856D6" style={{marginTop: 2}} />
+                  <Text style={styles.infoText}>{place.address}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Ionicons name="time" size={20} color="#FF9500" />
+                  <Text style={styles.infoText}>เวลาทำการ: {place.opening_hours || "09:00 - 22:00"}</Text>
+                </View>
+              </View>
 
-          <View style={styles.detailBox}>
-            <View style={styles.detailItem}>
-              <View style={styles.smallIconBg}><Ionicons name="time-outline" size={20} color="#5856D6" /></View>
-              <Text style={styles.detailText}>เปิด: {place?.opening_hours}</Text>
+              <TouchableOpacity 
+                style={styles.mapButton}
+                onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}`)}
+              >
+                <LinearGradient colors={["#5856D6", "#7B79FF"]} style={styles.gradient}>
+                  <Ionicons name="navigate" size={22} color="white" />
+                  <Text style={styles.mapButtonText}>นำทางด้วย Google Maps</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
-            <View style={styles.detailItem}>
-              <View style={styles.smallIconBg}><Ionicons name="call-outline" size={20} color="#5856D6" /></View>
-              <Text style={styles.detailText}>โทร: {place?.phone}</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity style={styles.mapBtn} onPress={() => {
-            const url = Platform.select({
-              ios: `maps:0,0?q=${place.name}@${place.latitude},${place.longitude}`,
-              android: `geo:${place.latitude},${place.longitude}?q=${place.name}`
-            });
-            Linking.openURL(url!);
-          }}>
-            <Ionicons name="navigate-circle" size={24} color="white" style={{marginRight: 8}} />
-            <Text style={styles.btnText}>นำทางไปยังสถานที่</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.favBtn, {backgroundColor: isFavorite ? '#FF3B30' : '#007AFF'}]} 
-            onPress={handleFavoriteAction}
-          >
-            <Ionicons name={isFavorite ? "heart" : "heart-outline"} size={22} color="white" style={{marginRight: 8}} />
-            <Text style={styles.btnText}>{isFavorite ? "ลบจากรายการโปรด" : "เพิ่มเป็นรายการโปรด"}</Text>
-          </TouchableOpacity>
+          ) : (
+            <ReviewSection placeId={id as string} />
+          )}
         </View>
       </ScrollView>
     </View>
@@ -126,21 +143,47 @@ export default function PlaceDetail() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#5856D6" },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: { height: 250, backgroundColor: "#E5E5EA", borderBottomLeftRadius: 30, borderBottomRightRadius: 30, overflow: 'hidden' },
-  headerImage: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
-  contentCard: { flex: 1, backgroundColor: "#F8F9FA", borderTopLeftRadius: 40, borderTopRightRadius: 40, padding: 30, marginTop: -30, minHeight: 500 },
-  categoryText: { fontSize: 13, fontWeight: "bold", color: "#5856D6", marginBottom: 8 },
-  title: { fontSize: 26, fontWeight: "bold", color: "#1C1C1E", marginBottom: 15 },
-  infoRow: { flexDirection: "row", alignItems: "center", marginBottom: 20 },
-  infoText: { fontSize: 15, color: "#666", marginLeft: 8, flex: 1 },
-  divider: { height: 1, backgroundColor: "#E5E5EA", marginBottom: 25 },
-  detailBox: { marginBottom: 30 },
-  detailItem: { flexDirection: "row", alignItems: "center", marginBottom: 15 },
-  smallIconBg: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#E8E7FF", justifyContent: "center", alignItems: "center" },
-  detailText: { fontSize: 16, color: "#444", marginLeft: 12 },
-  mapBtn: { backgroundColor: "#34C759", height: 55, borderRadius: 15, flexDirection: "row", justifyContent: "center", alignItems: "center", marginBottom: 12 },
-  favBtn: { height: 55, borderRadius: 15, flexDirection: "row", justifyContent: "center", alignItems: "center" },
-  btnText: { color: "white", fontSize: 16, fontWeight: "bold" }
+  container: { flex: 1, backgroundColor: 'white' },
+  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  
+  backBtn: { 
+    position: 'absolute', zIndex: 10, left: 20,
+    backgroundColor: 'white', padding: 10, borderRadius: 15,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 5 
+  },
+
+  imageContainer: { width: width, height: 280, backgroundColor: '#eee' }, // ปรับลงจาก 320 เหลือ 280
+  image: { width: '100%', height: '100%', resizeMode: 'cover' },
+  imageTopOverlay: { position: 'absolute', top: 0, left: 0, right: 0, height: 120 },
+
+  titleSection: { padding: 20, backgroundColor: 'white' }, // เอา marginTop: -30 ออกเพื่อให้ Tab ไม่ขยับตาม
+  name: { fontSize: 26, fontWeight: 'bold', color: '#1C1C1E', letterSpacing: -0.5 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 10, flexWrap: 'wrap' },
+  typeBadge: { backgroundColor: '#E8E7FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+  typeText: { fontSize: 14, color: '#5856D6', fontWeight: '600' },
+  statusBadge: { backgroundColor: '#F2F2F7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  statusText: { fontSize: 13, color: '#8E8E93', fontWeight: '500' },
+
+  // TAB WRAPPER - เพิ่มความมั่นใจว่า Tab จะขึ้นชัวร์
+  tabWrapper: { paddingHorizontal: 20, paddingVertical: 10, backgroundColor: 'white' },
+  tabContainer: { 
+    flexDirection: 'row', 
+    backgroundColor: '#F2F2F7', 
+    borderRadius: 16, 
+    padding: 4,
+    height: 52 
+  },
+  tabButton: { flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 12 },
+  activeTab: { backgroundColor: 'white', shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+  tabLabel: { fontSize: 15, fontWeight: '600', color: '#8E8E93' },
+  activeTabLabel: { color: '#5856D6' },
+
+  contentArea: { paddingHorizontal: 20, paddingBottom: 40 },
+  infoCard: { backgroundColor: '#F8F9FB', padding: 20, borderRadius: 24, marginBottom: 24 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  infoText: { fontSize: 15, color: '#3A3A3C', marginLeft: 12, flex: 1, lineHeight: 22 },
+
+  mapButton: { borderRadius: 20, overflow: 'hidden', elevation: 4 },
+  gradient: { height: 60, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
+  mapButtonText: { color: 'white', fontSize: 17, fontWeight: 'bold' }
 });

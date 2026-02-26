@@ -23,7 +23,10 @@ export default function Layout() {
       {/* หน้าอื่นๆ เปิดไว้ปกติเพื่อให้มีปุ่ม Back */}
       <Stack.Screen name="map" options={{ title: "แผนที่" }} />
       <Stack.Screen name="favorites" options={{ title: "รายการโปรด" }} />
-      <Stack.Screen name="place/[id]" options={{ title: "" }} />
+      <Stack.Screen name="place/[id]" options={{ 
+    headerShown: false, // 👈 ใส่บรรทัดนี้ลงไปค่ะแม่! สำคัญมาก
+    title: "" 
+  }} />
     </Stack>
   );
 }

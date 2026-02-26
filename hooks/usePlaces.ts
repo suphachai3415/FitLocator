@@ -1,61 +1,54 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import * as Location from "expo-location";
-import { SportPlace } from "../types/place";
-import { fetchPlaces } from "../services/api";
-import { calculateDistance } from "../utils/distance";
+import { PlaceService } from "../services/placeService";
+import { getDistance } from "../utils/distance";
 
 export const usePlaces = () => {
-  const [places, setPlaces] = useState<SportPlace[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [places, setPlaces] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadPlaces = async (searchKeyword: string = "") => {
+  const loadData = async (isRefreshing = false) => {
     try {
-      setLoading(true);
-      setError(null);
-
-      const { status } =
-        await Location.requestForegroundPermissionsAsync();
-
+      if (!isRefreshing) setLoading(true);
+      
+      const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        setError("กรุณาเปิดสิทธิ์การเข้าถึงตำแหน่ง");
+        console.warn("Permission to access location was denied");
         return;
       }
 
-      const location =
-        await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-
+      const location = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = location.coords;
 
-      const data = await fetchPlaces(
-        latitude,
-        longitude,
-        searchKeyword,
-        15000 // 15km ทีเดียว
-      );
+      const data = await PlaceService.getPlaces();
+      const updated = data.map((place: any) => ({
+        ...place,
+        distance: getDistance(latitude, longitude, place.latitude, place.longitude)
+      }));
 
-      const sorted = data
-        .map((place) => ({
-          ...place,
-          distance: calculateDistance(
-            latitude,
-            longitude,
-            place.latitude,
-            place.longitude
-          ),
-        }))
-        .sort((a, b) => a.distance - b.distance)
-        .slice(0, 30);
-
-      setPlaces(sorted);
-    } catch (err) {
-      setError("ไม่สามารถโหลดสถานที่ได้");
+      // เรียงลำดับและดึง 10 อันดับแรก
+      const sortedData = updated
+        .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0))
+        .slice(0, 10);
+        
+      setPlaces(sortedData);
+    } catch (error) {
+      console.error("Error loading places:", error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  return { places, loading, error, loadPlaces };
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadData(true);
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  return { places, loading, refreshing, onRefresh };
 };
