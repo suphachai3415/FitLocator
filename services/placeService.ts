@@ -1,17 +1,27 @@
 // services/placeService.ts
-import { supabase } from './supabase'; // ไฟล์ที่เก็บ config supabase
+import { supabase } from './supabase';
 
 export const PlaceService = {
+  // ดึงข้อมูลทั้งหมด (สำหรับหน้า Home และ Map)
   async getPlaces() {
-    // ดึงข้อมูลจากตารางชื่อ 'places' ใน Supabase
     const { data, error } = await supabase
       .from('places')
-      .select('*');
+      .select('*')
+      .order('name', { ascending: true }); // เรียงตามชื่อ
 
-    if (error) {
-      console.error("Supabase Error:", error);
-      throw error;
-    }
+    if (error) throw error;
+    return data;
+  },
+
+  // ดึงข้อมูลเฉพาะสถานที่ (สำหรับหน้า [id].tsx)
+  async getPlaceById(id: string) {
+    const { data, error } = await supabase
+      .from('places')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
     return data;
   }
 };

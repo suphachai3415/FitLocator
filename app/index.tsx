@@ -11,7 +11,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import ImageCarousel from "../components/ImageCarousel"; 
 import { getDistance } from "../utils/distance";
 import { PlaceCard } from "../components/PlaceCard"; 
-import { PlaceService } from "../services/placeService";
+import { PlaceService } from "../services/placeService"; 
 
 const { width } = Dimensions.get("window");
 
@@ -28,31 +28,21 @@ export default function Home() {
   const loadData = async () => {
     try {
       if (!refreshing) setLoading(true);
-
-      // 1. จัดการ GPS
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        setLoading(false);
-        return;
-      }
-      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      if (status !== "granted") return;
+      const location = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = location.coords;
 
-      // 2. 🔥 ดึงข้อมูลผ่าน Service (Supabase)
       const data = await PlaceService.getPlaces();
-
-      // 3. คำนวณระยะทาง
       const updated = data.map((place: any) => ({
         ...place,
         distance: getDistance(latitude, longitude, place.latitude, place.longitude)
       }));
 
-      // เรียงลำดับและจัดเก็บ
-     // updated.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
-     // setPlaces(updated.slice(0, 10));
-
+      // เรียงลำดับตามระยะทางและดึงมาโชว์ 10 อันดับแรก
+      setPlaces(updated.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0)).slice(0, 10));
     } catch (error) {
-      console.error("Error loading data:", error);
+      console.error(error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -74,51 +64,63 @@ export default function Home() {
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <View style={styles.headerWrapper}>
+              {/* ส่วน Logo */}
               <View style={styles.topLogoRow}>
                 <Ionicons name="flash" size={24} color="#5856D6" />
                 <Text style={styles.logoText}>FITLOCATOR</Text>
               </View>
-              <ImageCarousel />
-              <View style={styles.welcomeSection}>
-                <Text style={styles.subtitle}>สนามกีฬาที่ใกล้คุณที่สุดตอนนี้</Text>
+
+              {/* รูปสไลด์ */}
+              <View style={styles.carouselContainer}>
+                <ImageCarousel />
               </View>
+
+              {/* ปุ่มกดเมนูทางลัด */}
               <View style={styles.topButtons}>
                 <TouchableOpacity style={styles.mapBtn} onPress={() => router.push("/map")}>
                   <LinearGradient colors={["#1C1C1E", "#3A3A3C"]} style={styles.innerBtnGradient}>
-                    <Ionicons name="map" size={18} color="white" /><Text style={styles.btnText}>ดูแผนที่</Text>
+                    <Ionicons name="map" size={18} color="white" />
+                    <Text style={styles.btnText}>ดูแผนที่</Text>
                   </LinearGradient>
                 </TouchableOpacity>
+
                 <TouchableOpacity style={styles.favBtn} onPress={() => router.push("/favorites")}>
                   <LinearGradient colors={["#FF2D55", "#FF5E7D"]} style={styles.innerBtnGradient}>
-                    <Ionicons name="heart" size={18} color="white" /><Text style={styles.btnText}>รายการโปรด</Text>
+                    <Ionicons name="heart" size={18} color="white" />
+                    <Text style={styles.btnText}>รายการโปรด</Text>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
+
+              {/* ✅ ส่วนหัวข้อ List ที่ปรับใหม่ให้ "เริ่ด" ขึ้น */}
               <View style={styles.listHeader}>
-                <Text style={styles.sectionTitle}>10 อันดับใกล้คุณ</Text>
-                {loading && !refreshing && <ActivityIndicator size="small" color="#5856D6" />}
+                <View>
+                  <Text style={styles.sectionTitle}>สถานที่ใกล้ตัวคุณ</Text>
+                  <View style={styles.subTitleRow}>
+                    <Ionicons name="navigate-circle" size={14} color="#5856D6" />
+                    <Text style={styles.subTitleText}>10 อันดับที่ใกล้พิกัดปัจจุบันที่สุด</Text>
+                  </View>
+                </View>
+                
+                {loading && !refreshing ? (
+                  <ActivityIndicator size="small" color="#5856D6" />
+                ) : (
+                  <View style={styles.countBadge}>
+                    <Text style={styles.countText}>{places.length} แห่ง</Text>
+                  </View>
+                )}
               </View>
             </View>
           }
           renderItem={({ item }) => (
             <PlaceCard 
               item={item} 
-              onPress={() => router.push({
-                pathname: "/place/[id]",
-                params: { id: item.id, name: item.name, lat: item.latitude, lng: item.longitude }
-              })}
+              onPress={() => router.push(`/place/${item.id}`)} 
             />
           )}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#5856D6" />}
-          contentContainerStyle={{ paddingBottom: 40 }}
-          ListEmptyComponent={!loading ? (
-            <View style={{ alignItems: 'center', marginTop: 50 }}>
-              <Text style={styles.emptyText}>ไม่พบสถานที่ใกล้เคียง</Text>
-              <TouchableOpacity onPress={loadData} style={{ marginTop: 10 }}>
-                <Text style={{ color: '#5856D6' }}>ลองใหม่อีกครั้ง</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
+          ListEmptyComponent={!loading ? <Text style={styles.emptyText}>ไม่พบข้อมูลในบริเวณนี้</Text> : null}
+          contentContainerStyle={{ paddingBottom: 30 }}
         />
       </SafeAreaView>
     </View>
@@ -132,14 +134,14 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: width * 1.3, // ให้คลุมลงมาถึงช่วงปุ่ม
+    height: width * 1.0, 
   },
   headerWrapper: { paddingHorizontal: 20 },
   topLogoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 10,
-    marginBottom: 15,
+    marginBottom: 10,
   },
   logoText: {
     fontSize: 14,
@@ -148,12 +150,16 @@ const styles = StyleSheet.create({
     marginLeft: 5,
     letterSpacing: 2,
   },
-  welcomeSection: { marginTop: 25, marginBottom: 20 },
-  title: { fontSize: 36, fontWeight: "900", color: "#1C1C1E", letterSpacing: -1 },
-  subtitle: { fontSize: 16, color: "#636366", marginTop: 4 },
-  topButtons: { flexDirection: "row", gap: 12, marginBottom: 35 },
-  mapBtn: { flex: 1, height: 58, borderRadius: 18, overflow: 'hidden', elevation: 5 },
-  favBtn: { flex: 1, height: 58, borderRadius: 18, overflow: 'hidden', elevation: 5 },
+  carouselContainer: {
+    marginBottom: 15,
+  },
+  topButtons: { 
+    flexDirection: "row", 
+    gap: 12, 
+    marginBottom: 30 
+  },
+  mapBtn: { flex: 1, height: 58, borderRadius: 18, overflow: 'hidden', elevation: 4 },
+  favBtn: { flex: 1, height: 58, borderRadius: 18, overflow: 'hidden', elevation: 4 },
   innerBtnGradient: {
     flex: 1,
     flexDirection: "row",
@@ -161,12 +167,41 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   btnText: { color: "white", marginLeft: 8, fontWeight: "700", fontSize: 15 },
+  
+  // ✅ Styles ส่วนหัวข้อใหม่
   listHeader: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
-    alignItems: 'center',
-    marginBottom: 15 
+    alignItems: 'flex-start',
+    marginBottom: 20 
   },
-  sectionTitle: { fontSize: 22, fontWeight: "800", color: "#1C1C1E" },
-  emptyText: { textAlign: 'center', marginTop: 40, color: '#AEAEB2' },
+  sectionTitle: { 
+    fontSize: 22, 
+    fontWeight: "800", 
+    color: "#1C1C1E",
+    letterSpacing: -0.5 
+  },
+  subTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  subTitleText: {
+    fontSize: 13,
+    color: "#8E8E93",
+    marginLeft: 4,
+    fontWeight: "500",
+  },
+  countBadge: {
+    backgroundColor: '#E8E7FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  countText: {
+    color: '#5856D6',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  emptyText: { textAlign: 'center', marginTop: 50, color: '#AEAEB2', fontSize: 16 },
 });

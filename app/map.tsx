@@ -1,298 +1,251 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  TextInput,
-  StyleSheet,
-  Linking,
-  Platform,
-  SafeAreaView,
-  ActivityIndicator,
-  Alert,
+  View, StyleSheet, Dimensions, ActivityIndicator,
+  Text, TouchableOpacity, TextInput, Platform, Keyboard
 } from "react-native";
-import MapView, {
-  Marker,
-  AnimatedRegion,
-  PROVIDER_GOOGLE,
-  Callout,
-} from "react-native-maps";
+import MapView, { Marker, Callout, PROVIDER_GOOGLE } from "react-native-maps";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import placesData from "../data/places.json";
+import { PlaceService } from "../services/placeService";
 import { getDistance } from "../utils/distance";
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+
+const { width, height } = Dimensions.get("window");
 
 export default function MapScreen() {
-  const router = useRouter();
-  const mapRef = useRef<MapView>(null);
-  const followUser = useRef(true);
-
-  // แก้จุดที่ 1: ใช้ any ครอบเพื่อให้ TypeScript ไม่บ่นเรื่อง AnimatedRegion properties
-  const userLocationAnim = useRef<any>(
-    new AnimatedRegion({
-      latitude: 13.7563,
-      longitude: 100.5018,
-      latitudeDelta: 0.05,
-      longitudeDelta: 0.05,
-    })
-  ).current;
-
-  const [userLocation, setUserLocation] = useState<any>(null);
-  const [initialRegion, setInitialRegion] = useState<any>(null);
   const [places, setPlaces] = useState<any[]>([]);
-  const [filteredPlaces, setFilteredPlaces] = useState<any[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [search, setSearch] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [nearbyOnly, setNearbyOnly] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [location, setLocation] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const mapRef = useRef<MapView>(null);
+  const router = useRouter();
 
   useEffect(() => {
-    initMap();
-    loadFavorites();
+    loadMapData();
   }, []);
 
-  useEffect(() => {
-    if (!userLocation) return;
-    const updated = placesData.map((place: any) => ({
-      ...place,
-      distance: getDistance(
-        userLocation.latitude,
-        userLocation.longitude,
-        place.latitude,
-        place.longitude
-      ),
-    }));
-    updated.sort((a, b) => a.distance - b.distance);
-    setPlaces(updated);
-  }, [userLocation]);
-
-  useEffect(() => {
-    let result = [...places];
-    if (search.trim()) {
-      result = result.filter((place) =>
-        place.name.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-    if (nearbyOnly) {
-      result = result.filter((place) => place.distance <= 5);
-    }
-    setFilteredPlaces(result);
-  }, [places, search, nearbyOnly]);
-
-  const initMap = async () => {
+  const loadMapData = async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Permission Denied", "กรุณาเปิด Location");
-        return;
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      let curLoc = null;
+      if (status === 'granted') {
+        curLoc = await Location.getCurrentPositionAsync({});
+        setLocation(curLoc.coords);
       }
 
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+      const [data, favStore] = await Promise.all([
+        PlaceService.getPlaces(),
+        AsyncStorage.getItem("favorites")
+      ]);
 
-      const coords = location.coords;
-      const region = {
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      };
+      const favIds = favStore ? JSON.parse(favStore).map((f: any) => f.id) : [];
+      setFavorites(favIds);
+      setPlaces(data);
 
-      setUserLocation(coords);
-      setInitialRegion(region);
-      userLocationAnim.setValue(region);
+      if (curLoc && mapRef.current) {
+        mapRef.current.animateToRegion({
+          latitude: curLoc.coords.latitude,
+          longitude: curLoc.coords.longitude,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
+        }, 1000);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.High,
-          timeInterval: 2000,
-          distanceInterval: 3,
-        },
-        (loc) => {
-          const newCoords = loc.coords;
-          setUserLocation(newCoords);
-
-          // แก้จุดที่ 2: ใช้ as any เพื่อแก้ Error 'latitude' does not exist
-          userLocationAnim
-            .timing({
-              toValue: {
-                latitude: newCoords.latitude,
-                longitude: newCoords.longitude,
-              } as any,
-              duration: 800,
-              useNativeDriver: false,
-            })
-            .start();
-
-          if (followUser.current && mapRef.current) {
-            mapRef.current.animateCamera(
-              {
-                center: {
-                  latitude: newCoords.latitude,
-                  longitude: newCoords.longitude,
-                },
-                zoom: 16,
-              },
-              { duration: 800 }
-            );
-          }
-        }
+  const handleSearch = (text: string) => {
+    setSearchQuery(text);
+    if (text.trim() === "") {
+      setSuggestions([]);
+    } else {
+      const filtered = places.map(p => {
+        const d = location
+          ? getDistance(location.latitude, location.longitude, parseFloat(p.latitude), parseFloat(p.longitude))
+          : null;
+        return { ...p, distance: d };
+      }).filter(p =>
+        p.name.toLowerCase().includes(text.toLowerCase()) ||
+        p.type.toLowerCase().includes(text.toLowerCase())
       );
-    } catch (e) {
-      Alert.alert("Error", "ไม่สามารถดึงตำแหน่งได้");
+
+      const sorted = filtered.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
+      setSuggestions(sorted.slice(0, 5));
     }
   };
 
-  const loadFavorites = async () => {
-    const stored = await AsyncStorage.getItem("favorites");
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      setFavorites(parsed.map((f: any) => f.id));
+  const selectSuggestion = (place: any) => {
+    setSearchQuery(place.name);
+    setSuggestions([]);
+    Keyboard.dismiss();
+    if (mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: parseFloat(place.latitude),
+        longitude: parseFloat(place.longitude),
+        latitudeDelta: 0.008,
+        longitudeDelta: 0.008,
+      }, 1000);
     }
   };
 
-  const openNavigation = (place: any) => {
-    const url = Platform.select({
-      ios: `maps:0,0?q=${place.latitude},${place.longitude}`,
-      android: `geo:${place.latitude},${place.longitude}`,
-    });
-    if (url) Linking.openURL(url);
-  };
-
-  if (!initialRegion) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={{ marginTop: 10 }}>กำลังค้นหาตำแหน่ง...</Text>
-      </View>
-    );
-  }
+  if (loading) return (
+    <View style={styles.center}>
+      <ActivityIndicator size="large" color="#5856D6" />
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.header}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={28} />
-          </TouchableOpacity>
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={20} color="#999" />
-            <TextInput
-              style={styles.input}
-              placeholder="ค้นหาสถานที่..."
-              value={search}
-              onChangeText={(text) => {
-                setSearch(text);
-                setShowSuggestions(true);
-              }}
-            />
-          </View>
-        </View>
-      </SafeAreaView>
-
-      {/* แก้จุดที่ 3: จัดระเบียบ Text ให้ไม่มีช่องว่างส่วนเกิน */}
-      {showSuggestions && search.length > 0 && (
-        <View style={styles.suggestionsBox}>
-          <FlatList
-            data={filteredPlaces.slice(0, 5)}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.suggestionItem}
-                onPress={() => {
-                  followUser.current = false;
-                  mapRef.current?.animateCamera({
-                    center: { latitude: item.latitude, longitude: item.longitude },
-                    zoom: 16,
-                  });
-                  setShowSuggestions(false);
-                }}
-              >
-                <View style={styles.suggestionRow}>
-                  <Text style={styles.suggestionName}>{item.name}</Text>
-                  <Text style={styles.suggestionDist}>{item.distance?.toFixed(1)} km</Text>
-                </View>
-              </TouchableOpacity>
-            )}
-          />
-        </View>
-      )}
-
       <MapView
         ref={mapRef}
+        onPress={() => Keyboard.dismiss()}
         provider={PROVIDER_GOOGLE}
         style={styles.map}
-        initialRegion={initialRegion}
-        showsUserLocation={false}
-        onTouchStart={() => { followUser.current = false; }}
+        initialRegion={{
+          latitude: location?.latitude || 13.7563,
+          longitude: location?.longitude || 100.5018,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
+        }}
+        showsUserLocation={true}
       >
-        <Marker.Animated
-          coordinate={userLocationAnim as any}
-        >
-          <View style={styles.userMarkerOuter}>
-            <View style={styles.userMarkerInner} />
-          </View>
-        </Marker.Animated>
-
-        {filteredPlaces.map((place) => (
-          <Marker
-            key={place.id}
-            coordinate={{ latitude: place.latitude, longitude: place.longitude }}
-            pinColor={favorites.includes(place.id) ? "#FF2D55" : "#007AFF"}
-          >
-            <Callout onPress={() => openNavigation(place)}>
-              <View style={styles.callout}>
-                <Text style={styles.calloutTitle}>{place.name}</Text>
-                <Text style={styles.calloutText}>📍 {place.distance?.toFixed(2)} km</Text>
-              </View>
-            </Callout>
-          </Marker>
-        ))}
+        {places.map((place) => {
+          const isFav = favorites.includes(place.id);
+          return (
+            <Marker
+              key={place.id}
+              coordinate={{
+                latitude: parseFloat(place.latitude),
+                longitude: parseFloat(place.longitude),
+              }}
+              pinColor={isFav ? "#FF2D55" : "#5856D6"}
+            >
+              <Callout onPress={() => router.push(`/place/${place.id}`)}>
+                <View style={styles.callout}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={styles.calloutTitle}>{place.name}</Text>
+                    {isFav && <Ionicons name="heart" size={14} color="#FF2D55" style={{ marginLeft: 5 }} />}
+                  </View>
+                  <Text style={styles.calloutSubtitle}>{place.type} • คลิกดูข้อมูล</Text>
+                </View>
+              </Callout>
+            </Marker>
+          );
+        })}
       </MapView>
 
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => {
-          followUser.current = true;
-          if (userLocation) {
-            mapRef.current?.animateCamera(
-              {
-                center: { latitude: userLocation.latitude, longitude: userLocation.longitude },
-                zoom: 16,
-              },
-              { duration: 800 }
-            );
-          }
-        }}
-      >
-        <Ionicons name="locate" size={28} color="#007AFF" />
-      </TouchableOpacity>
+      {/* 🔍 Search UI: ปรับให้ยาวเต็มจอ สวยๆ เลยแม่ */}
+      <View style={styles.searchWrapper}>
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={20} color="#8E8E93" />
+          <TextInput
+            placeholder="ค้นหายิม, สนามกีฬา..."
+            style={styles.input}
+            value={searchQuery}
+            onChangeText={handleSearch}
+          />
+          {searchQuery !== "" && (
+            <TouchableOpacity onPress={() => {
+              handleSearch(""); // ล้างคำค้นหา
+              Keyboard.dismiss(); // ✅ ปิดแป้นพิมพ์ทันที
+            }}>
+              <Ionicons name="close-circle" size={20} color="#8E8E93" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* รายการแนะนำ */}
+        {suggestions.length > 0 && (
+          <View style={styles.suggestionList}>
+            {suggestions.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.suggestionItem}
+                onPress={() => selectSuggestion(item)}
+              >
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="location-sharp" size={16} color="#5856D6" />
+                    <Text style={styles.suggestionText} numberOfLines={1}>{item.name}</Text>
+                  </View>
+                  <Text style={styles.distanceSubText}>{item.type} • {item.city}</Text>
+                </View>
+
+                {item.distance !== null && (
+                  <View style={styles.distanceBadge}>
+                    <Text style={styles.distanceText}>{item.distance.toFixed(1)} km</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  map: { flex: 1 },
+  map: { width: width, height: height },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: { position: "absolute", top: 10, left: 15, right: 15, zIndex: 10 },
-  headerRow: { flexDirection: "row", gap: 10 },
-  backBtn: { width: 45, height: 45, backgroundColor: "white", borderRadius: 15, justifyContent: "center", alignItems: "center", elevation: 5 },
-  searchBar: { flex: 1, flexDirection: "row", backgroundColor: "white", borderRadius: 15, paddingHorizontal: 15, alignItems: "center", elevation: 5 },
-  input: { flex: 1, marginLeft: 10, height: 45 },
-  suggestionsBox: { position: "absolute", top: 100, left: 15, right: 15, backgroundColor: "white", borderRadius: 15, zIndex: 11, elevation: 5, overflow: 'hidden' },
-  suggestionItem: { padding: 15, borderBottomWidth: 0.5, borderBottomColor: '#eee' },
-  suggestionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  suggestionName: { fontSize: 14, color: '#333' },
-  suggestionDist: { color: "#007AFF", fontSize: 12, fontWeight: 'bold' },
-  callout: { padding: 5, width: 140 },
-  calloutTitle: { fontWeight: "bold", fontSize: 14 },
-  calloutText: { fontSize: 12, color: '#666', marginTop: 2 },
-  fab: { position: "absolute", bottom: 40, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: "white", justifyContent: "center", alignItems: "center", elevation: 8 },
-  userMarkerOuter: { width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(0,122,255,0.2)", justifyContent: "center", alignItems: "center" },
-  userMarkerInner: { width: 14, height: 14, borderRadius: 7, backgroundColor: "#007AFF", borderWidth: 2, borderColor: 'white' },
+
+  // ✅ ปรับให้ลอยกลางจอแบบสมดุล
+  searchWrapper: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 20 : 20, // ปรับลงมานิดหน่อยเพราะไม่มีปุ่ม Back แล้ว
+    left: 15,
+    right: 15,
+    zIndex: 100,
+  },
+  searchBox: {
+    backgroundColor: 'white',
+    height: 50,
+    borderRadius: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  input: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 16,
+    color: '#1C1C1E',
+  },
+  suggestionList: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    marginTop: 8,
+    overflow: 'hidden',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#F2F2F7',
+  },
+  suggestionText: { marginLeft: 8, fontSize: 15, fontWeight: '600', color: '#1C1C1E' },
+  distanceSubText: { fontSize: 12, color: '#8E8E93', marginLeft: 24, marginTop: 2 },
+  distanceBadge: { backgroundColor: '#E8E7FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  distanceText: { fontSize: 11, fontWeight: 'bold', color: '#5856D6' },
+  callout: { padding: 5, minWidth: 140 },
+  calloutTitle: { fontWeight: "bold", fontSize: 14, color: '#1C1C1E' },
+  calloutSubtitle: { fontSize: 12, color: '#8E8E93' },
 });
