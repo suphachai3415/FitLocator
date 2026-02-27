@@ -1,18 +1,26 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Ionicons } from "@expo/vector-icons"; // เพิ่มไอคอน
+import { Ionicons } from "@expo/vector-icons"; 
+import { useFocusEffect } from "expo-router"; // 1. เพิ่มตัวนี้
+import { useCallback } from "react"; // 2. เพิ่มตัวนี้
 
 export default function Favorites() {
   const [data, setData] = useState([]);
 
-  useEffect(() => {
-    loadFavorites();
-  }, []);
+useFocusEffect(
+    useCallback(() => {
+      loadFavorites();
+    }, [])
+  );
 
-  const loadFavorites = async () => {
+ const loadFavorites = async () => {
     const stored = await AsyncStorage.getItem("favorites");
-    if (stored) setData(JSON.parse(stored));
+    if (stored) {
+      setData(JSON.parse(stored));
+    } else {
+      setData([]); // เคลียร์ค่าถ้าไม่มีข้อมูล
+    }
   };
 
   // --- ฟังก์ชันลบออกจากรายการโปรด ---

@@ -9,6 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { PlaceService } from "../../services/placeService";
 import ReviewSection from "../../components/ReviewSection";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width } = Dimensions.get("window");
 
@@ -21,18 +22,70 @@ export default function PlaceDetail() {
 
   useEffect(() => {
     if (id) loadData();
+    checkIfFavorite();
   }, [id]);
+
+  const checkIfFavorite = async () => {
+  try {
+    const stored = await AsyncStorage.getItem("favorites");
+    if (stored) {
+      const favoritesList = JSON.parse(stored);
+      // เช็คว่ามี id นี้อยู่ในรายการโปรดหรือยัง
+      const isFav = favoritesList.some((item: any) => item.id === id);
+      setIsFavorite(isFav);
+    }
+  } catch (error) {
+    console.error("Error checking favorite:", error);
+  }
+};
 
   const loadData = async () => {
     const data = await PlaceService.getPlaceById(id as string);
     setPlace(data);
   };
 
+  
+
   if (!place) return (
     <View style={styles.loader}>
       <Text style={{fontSize: 16, color: '#8E8E93'}}>กำลังโหลดข้อมูล... ✨</Text>
     </View>
   );
+
+  // หน้า PlaceDetail.tsx
+
+const toggleFavorite = async () => {
+  try {
+    // 1. ดึงรายการเดิมจากเครื่อง
+    const storedFavorites = await AsyncStorage.getItem("favorites");
+    let favoritesList = storedFavorites ? JSON.parse(storedFavorites) : [];
+
+    if (isFavorite) {
+      // ถ้าเป็น Favorite อยู่แล้ว -> ให้ลบออก
+      favoritesList = favoritesList.filter((item: any) => item.id !== place.id);
+    } else {
+      // ถ้ายังไม่เป็น -> ให้เพิ่มเข้าไป (ใส่โค้ดที่คุณถามตรงนี้ครับ!) ✅
+      const newFavorite = {
+        id: place.id,
+        name: place.name,
+        type: place.type,
+        image_url: place.image_url,
+        distance: place.distance // ตรวจสอบว่าใน object 'place' มี field พวกนี้ครบนะ
+      };
+      
+      favoritesList.push(newFavorite);
+    }
+
+    // 2. บันทึกกลับลงเครื่อง
+    await AsyncStorage.setItem("favorites", JSON.stringify(favoritesList));
+    
+    // 3. เปลี่ยนสถานะหัวใจในหน้าจอ
+    setIsFavorite(!isFavorite);
+
+  } catch (error) {
+    console.error("Error saving favorite:", error);
+  }
+};
 
   
 
@@ -50,16 +103,25 @@ export default function PlaceDetail() {
   </TouchableOpacity>
 
   {/* ปุ่มหัวใจ */}
-  <TouchableOpacity 
-    style={{ backgroundColor: 'white', padding: 10, borderRadius: 15, elevation: 5, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 4 }} 
-    onPress={() => setIsFavorite(!isFavorite)}
-  >
-    <Ionicons 
-      name={isFavorite ? "heart" : "heart-outline"} 
-      size={24} 
-      color={isFavorite ? "#FF2D55" : "black"} 
-    />
-  </TouchableOpacity>
+  {/* แก้ไขส่วนนี้ใน return */}
+<TouchableOpacity 
+  style={{ 
+    backgroundColor: 'white', 
+    padding: 10, 
+    borderRadius: 15, 
+    elevation: 5, 
+    shadowColor: "#000", 
+    shadowOpacity: 0.2, 
+    shadowRadius: 4 
+  }} 
+  onPress={toggleFavorite} // ✅ ต้องเรียกใช้ฟังก์ชัน toggleFavorite
+>
+  <Ionicons 
+    name={isFavorite ? "heart" : "heart-outline"} 
+    size={24} 
+    color={isFavorite ? "#FF2D55" : "black"} 
+  />
+</TouchableOpacity>
 </View>
       
 
