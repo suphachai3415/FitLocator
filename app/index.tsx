@@ -11,12 +11,13 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 
-// 📦 Import สิ่งที่เราแยกไฟล์ไว้
 import { usePlaces } from "../hooks/usePlaces";
 import { HomeHeader } from "../components/HomeHeader";
 import { SectionHeader } from "../components/SectionHeader";
 import { PlaceCard } from "../components/PlaceCard";
+import { PlaceSkeleton } from "../components/PlaceSkeleton"; // 👈 ตัวที่สร้างใหม่
 
 const { width } = Dimensions.get("window");
 
@@ -24,24 +25,31 @@ export default function Home() {
   const { places, loading, refreshing, onRefresh } = usePlaces();
   const router = useRouter();
 
+  // 🦴 สร้างรายการ Skeleton หลอกๆ 3 อันตอนโหลด
+  const renderSkeleton = () => (
+    <View style={{ paddingHorizontal: 20 }}>
+      <PlaceSkeleton />
+      <PlaceSkeleton />
+      <PlaceSkeleton />
+    </View>
+  );
+
   return (
     <View style={styles.container}>
-      {/* 🎨 ปรับสีแถบด้านบน (นาฬิกา/แบตเตอรี่) ให้เป็นสีเข้มเพื่อให้ตัดกับพื้นหลัง */}
       <StatusBar barStyle="dark-content" />
 
-      {/* 🌈 พื้นหลังไล่เฉดสีด้านบนสุดเพื่อความละมุน */}
+      
       <LinearGradient 
-        colors={["#E8E7FF", "#F2F2F7", "#F8F9FB"]} 
+        colors={["#E8E7FF", "#F8F9FB", "transparent"]} 
         style={styles.gradientHeader} 
       />
 
       <SafeAreaView style={{ flex: 1 }}>
         <FlatList
-          data={places}
+          data={loading && !refreshing ? [] : places} // ถ้าโหลดอยู่ให้ส่ง array ว่างไปก่อนเพื่อโชว์ EmptyComponent หรือจัดการผ่าน Skeleton
           keyExtractor={(item) => item.id.toString()}
           showsVerticalScrollIndicator={false}
           
-          // 🏠 ส่วนหัวของ List (Carousel + ปุ่มทางลัด + หัวข้อรายการ)
           ListHeaderComponent={
             <View>
               <HomeHeader 
@@ -55,7 +63,6 @@ export default function Home() {
             </View>
           }
 
-          // 📍 รายการสถานที่ใกล้ตัว
           renderItem={({ item }) => (
             <View style={styles.cardWrapper}>
               <PlaceCard 
@@ -65,7 +72,6 @@ export default function Home() {
             </View>
           )}
 
-          // 🔄 ฟีเจอร์ไถลงเพื่อรีเฟรชข้อมูล
           refreshControl={
             <RefreshControl 
               refreshing={refreshing} 
@@ -74,17 +80,18 @@ export default function Home() {
             />
           }
 
-          // 💨 กรณีไม่มีข้อมูลให้แสดง
           ListEmptyComponent={
-            !loading ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>ไม่พบข้อมูลในบริเวณนี้ค่ะแม่ 🗺️</Text>
-              </View>
-            ) : null
+            loading && !refreshing 
+              ? renderSkeleton() 
+              : (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="location-outline" size={60} color="#D1D1D6" />
+                  <Text style={styles.emptyText}>ไม่พบข้อมูลในบริเวณนี้ค่ะ 🗺️</Text>
+                </View>
+              )
           }
 
-          // 📏 เว้นระยะขอบล่างให้สวยงาม
-          contentContainerStyle={{ paddingBottom: 40 }}
+          contentContainerStyle={styles.listContent}
         />
       </SafeAreaView>
     </View>
@@ -101,22 +108,26 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: width * 1.2, // ให้ความสูงเฉดสีครอบคลุมส่วนบน
+    height: 300, // ลดความสูงลงให้ดูสมดุล
   },
   cardWrapper: { 
     paddingHorizontal: 20,
-    marginBottom: 5 // ระยะห่างระหว่างการ์ด
+    marginBottom: 5
+  },
+  listContent: { 
+    paddingBottom: 40 
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 100
+    marginTop: 60
   },
   emptyText: { 
     textAlign: 'center', 
-    color: '#AEAEB2', 
+    color: '#8E8E93', 
     fontSize: 16,
+    marginTop: 10,
     fontWeight: '500'
   },
 });

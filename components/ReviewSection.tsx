@@ -62,20 +62,20 @@ export default function ReviewSection({ placeId }: { placeId: string }) {
       fetchReviews(); 
       Keyboard.dismiss();
     } catch (e) {
-      Alert.alert("อุ๊ยแม่", "บันทึกไม่ได้ ลองใหม่อีกทีนะ");
+      Alert.alert("บันทึกไม่ได้ ลองใหม่อีกทีนะ");
     } finally { setSending(false); }
   };
 
   // ✨ 4. ฟังก์ชันลบรีวิว
   const handleDelete = (id: string) => {
-    Alert.alert("ลบรีวิว", "แม่แน่ใจนะว่าจะลบรีวิวนี้?", [
+    Alert.alert("ลบรีวิว", "แน่ใจนะว่าจะลบรีวิวนี้?", [
       { text: "ยกเลิก", style: "cancel" },
       { text: "ลบเลย", style: "destructive", onPress: async () => {
         try {
           await PlaceService.deleteReview(id);
           fetchReviews();
         } catch (e) {
-          Alert.alert("ว้ายแม่", "ลบไม่ได้เฉยเลย");
+          Alert.alert("ไม่สามารถลบได้");
         }
       }}
     ]);
